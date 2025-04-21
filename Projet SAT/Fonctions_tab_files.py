@@ -1,4 +1,4 @@
-import pandas as pd
+﻿import pandas as pd
 import ast
 import numpy as np
 import cupy as cp
@@ -23,8 +23,11 @@ ki = np.array([k0*np.sin(theta_incident)*np.cos(phi_incident),
               k0*np.sin(theta_incident)*np.sin(phi_incident),
               k0*np.cos(theta_incident)])
 
+# Calculate wavelength for reference
+wavelength = 2*pi/k0
+
 # Cache for S matrix to avoid repeated file loading
-_s_matrix_cache = {}
+smatrix_cache = {}
 
 def magnitude_phase_to_complex(matrix):
     """Convert magnitude and phase to complex numbers."""
@@ -35,32 +38,53 @@ def magnitude_phase_to_complex(matrix):
     # Vectorized conversion to complex
     return 10**(magnitudes/20) * np.exp(1j * phases)
 
-def excel_to_python(file_name):
-    """Read S matrix from Excel file with caching."""
+def get_s_matrix(file_name, freq_index=0):
+    """Read S matrix from file with caching."""
     # Check cache first
-    if file_name in _s_matrix_cache:
-        return _s_matrix_cache[file_name]
+    if file_name in smatrix_cache:
+        return smatrix_cache[file_name]
     
-    def str_to_tuple_float(s):
+    # Check file extension
+    if file_name.lower().endswith('.tab'):
+        # Parse tab file using TestTab
         try:
-            t = ast.literal_eval(s)
-            return tuple(float(x) for x in t)
-        except (ValueError, SyntaxError):
+            frequencies, s_matrices = TestTab.parse_sparam_file(file_name)
+            
+            # Get the S-matrix for the specified frequency index
+            # Default is the first frequency point
+            s_matrix = s_matrices[freq_index]
+            
+            # Cache the result
+            smatrix_cache[file_name] = s_matrix
+            return s_matrix
+        except Exception as e:
+            print(f"Error reading tab file: {e}")
             return None
-    
-    try:
-        df = pd.read_excel(file_name)
-        df = df.dropna()  # Remove rows with missing values
-        df = df.drop_duplicates()  # Remove duplicate rows
-        df = df.map(str_to_tuple_float)
-        df = df.to_numpy()
-        df = df[:, 1:]  # Remove first column
+    elif file_name.lower().endswith(('.xlsx', '.xls')):
+        # Keep the original Excel parsing for backward compatibility
+        def str_to_tuple_float(s):
+            try:
+                t = ast.literal_eval(s)
+                return tuple(float(x) for x in t)
+            except (ValueError, SyntaxError):
+                return None
         
-        result = magnitude_phase_to_complex(df)
-        _s_matrix_cache[file_name] = result  # Cache the result
-        return result
-    except Exception as e:
-        print(f"Error reading Excel file: {e}")
+        try:
+            df = pd.read_excel(file_name)
+            df = df.dropna()  # Remove rows with missing values
+            df = df.drop_duplicates()  # Remove duplicate rows
+            df = df.map(str_to_tuple_float)
+            df = df.to_numpy()
+            df = df[:, 1:]  # Remove first column
+            
+            result = magnitude_phase_to_complex(df)
+            smatrix_cache[file_name] = result  # Cache the result
+            return result
+        except Exception as e:
+            print(f"Error reading Excel file: {e}")
+            return None
+    else:
+        print(f"Unsupported file format for {file_name}")
         return None
 
 @cuda.jit
@@ -253,9 +277,9 @@ def calculate_field_grid_cpu(s_matrix, x_range, y_range, z_val, magEincident):
     
     return field_grid
 
-def calculate_field_grid(file_name, magEincident, x_range, y_range, z_val=0, use_cuda=True):
+def calculate_field_grid(file_name, magEincident, x_range, y_range, z_val=0, use_cuda=True, freq_index=0):
     """Calculate the electric field over a grid of points at fixed z with proper evanescent handling."""
-    s_matrix = excel_to_python(file_name)
+    s_matrix = get_s_matrix(file_name, freq_index)
     if s_matrix is None:
         return None
     
@@ -289,7 +313,7 @@ def calculate_field_grid(file_name, magEincident, x_range, y_range, z_val=0, use
     
     return field_grid
 
-def plot_electric_field_3d(file_name, magEincident, resolution=150, z_val=0.1, use_cuda=True):
+def plot_electric_field_3d(file_name, magEincident, resolution=150, z_val=0.1, use_cuda=True, freq_index=0):
     """Plot the electric field magnitude as a 3D surface."""
     # Create coordinate grid
     x_range = np.linspace(0, Lx, resolution)
@@ -298,7 +322,7 @@ def plot_electric_field_3d(file_name, magEincident, resolution=150, z_val=0.1, u
     
     print(f"Calculating field values for {resolution}×{resolution} grid...")
     # Calculate field values over the entire grid at once
-    field_grid = calculate_field_grid(file_name, magEincident, x_range, y_range, z_val, use_cuda)
+    field_grid = calculate_field_grid(file_name, magEincident, x_range, y_range, z_val, use_cuda, freq_index)
     
     if field_grid is None:
         print("Error calculating field grid")
@@ -327,17 +351,20 @@ def plot_electric_field_3d(file_name, magEincident, resolution=150, z_val=0.1, u
     plt.savefig(f"Electric_Field_res{resolution}z{z_val:.2f}m.png", dpi=300)
     return fig
 
-# Optional: Add a function to plot field variations along z-axis
+# Function to plot field variations along z-axis
 def plot_field_vs_z(file_name, magEincident, x_point=0.5, y_point=0.5, z_range=None, 
-                   num_points=100, use_cuda=True):
+                   num_points=100, use_cuda=True, freq_index=0):
     """Plot field magnitude variation along z-axis at a specific (x,y) point."""
+    # Calculate wavelength for reference
+    wavelength = 2*np.pi/k0
+    
     if z_range is None:
         z_range = np.linspace(0, 5*wavelength, num_points)
     else:
         z_range = np.linspace(z_range[0], z_range[1], num_points)
     
     # Get S-matrix
-    s_matrix = excel_to_python(file_name)
+    s_matrix = get_s_matrix(file_name, freq_index)
     if s_matrix is None:
         return None
     
@@ -389,7 +416,6 @@ def plot_field_vs_z(file_name, magEincident, x_point=0.5, y_point=0.5, z_range=N
     ax.grid(True)
     
     # Add wavelength markers
-    wavelength = 2*np.pi/k0
     ax.axvline(x=wavelength, color='r', linestyle='--', alpha=0.5, label=f'λ = {wavelength:.2e} m')
     ax.axvline(x=2*wavelength, color='r', linestyle='--', alpha=0.3)
     ax.axvline(x=3*wavelength, color='r', linestyle='--', alpha=0.2)
