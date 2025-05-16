@@ -16,31 +16,31 @@ def main(filename):
         filename (str): Path to the S-parameter file
     """
     # Parse the S-parameter file
-    s_matrix = parse_sparam_file(filename)
+    s_matrix = parse_sparam_file(filename,f)
     matrix_shape = np.shape(s_matrix)
    
     # Make sure we have enough Floquet modes defined
-    while len(floquet_modes) < matrix_shape[0]:
+    while len(floquet_modes)+1 < matrix_shape[0]:
         user_input = input(f"Please enter the polarisation and indices of the {len(floquet_modes)+1}th mode, with format TE or TM,m,n: ")
         polar, m, n = user_input.split(',')
         floquet_modes[len(floquet_modes) + 1] = {'polarization': polar.strip(), 'm': int(m), 'n': int(n)}
    
     # Calculate source field using Floquet modes and S-matrix
-    resolution = 100  # Resolution for the field calculations
+    resolution = 100  # Resolution for the field calculationss
     Esource = calculate_Esource(floquet_modes, resolution, s_matrix)
    
     # Print information about each mode
     print_mode_info(floquet_modes)
    
     # Create the mask
-    mask = create_N_mask(resolution)
+    mask = np.ones((resolution,resolution))
    
     # Calculate currents on the mask
     currents = calculate_currents_on_mask(Esource, mask)
    
   # Generate the far-field radiation patterns
-    polar_fig = plot_far_field_radiated_OXZ(Esource, resolution,1800)
-    cartesian_fig = plot_far_field_cartesian(Esource, resolution,1800)
+    polar_fig = plot_far_field_radiated_OYZ(Esource,mask, resolution,1800)
+    cartesian_fig = plot_far_field_cartesian(Esource,mask, resolution,1800)
     
     # Show the figures
     plt.figure(polar_fig.number)
