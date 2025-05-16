@@ -1,82 +1,83 @@
 ﻿from Reconstitution_Floquet import *
-import matplotlib.pyplot as plt
 
-# Floquet modes with polarization information - properly defined
-floquet_modes = {
-    1: {'polarization': 'TE', 'm': 0, 'n': 0},
-    2: {'polarization': 'TM', 'm': 0, 'n': 0},
-    3: {'polarization': 'TE', 'm': 0, 'n': -1},
-    4: {'polarization': 'TE', 'm': 0, 'n': -2},
-    5: {'polarization': 'TE', 'm': -2, 'n': -1},
-    6: {'polarization': 'TE', 'm': 2, 'n': -1},
-    7: {'polarization': 'TE', 'm': 0, 'n': 2},
-    8: {'polarization': 'TE', 'm': 1, 'n': -1},
-    9: {'polarization': 'TM', 'm': -1, 'n': -1},
-    10: {'polarization': 'TM', 'm': 0, 'n': -1},
-    11: {'polarization': 'TM', 'm': -2, 'n': -1},
-    12: {'polarization': 'TM', 'm': 2, 'n': -1},
-    13: {'polarization': 'TM', 'm': 1, 'n': -1},
-
-}
+# Define Floquet modes with polarization information
+floquet_modes = {}
 
 def main(filename):
-    with open(filename, 'r') as file:
-        # Parse the S-parameter file
-        s_matrix = parse_sparam_file(filename)
-        a=np.shape(s_matrix)
-        while len(floquet_modes)<a[0]:
-            polar,m,n=input(f"Please enter the polarisation and indices of the {len(floquet_modes)+1}th mode, with format TE or TM,m,n :").split(',')
-            floquet_modes[len(floquet_modes) + 1] = {'polarization':polar,'m':int(m),'n':int(n)}
+    """
+    Main function to analyze Floquet modes and plot radiation patterns.
+   
+    Args:
+        filename (str): Path to the S-parameter file
+    """
+    # Parse the S-parameter file
+    s_matrix = parse_sparam_file(filename,f)
+    matrix_shape = np.shape(s_matrix)
+   
+    # Make sure we have enough Floquet modes defined
+    while len(floquet_modes)+1 < matrix_shape[0]:
+        user_input = input(f"Please enter the polarisation and indices of the {len(floquet_modes)+1}th mode, with format TE or TM,m,n: ")
+        polar, m, n = user_input.split(',')
+        floquet_modes[len(floquet_modes) + 1] = {'polarization': polar.strip(), 'm': int(m), 'n': int(n)}
+   
+    # Calculate source field using Floquet modes and S-matrix
+    resolution = 100  # Resolution for the field calculationss
+    Esource = calculate_Esource(floquet_modes, resolution, s_matrix)
+   
+    # Print information about each mode
+    print_mode_info(floquet_modes)
+   
+    # Create the mask
+    mask = np.ones((resolution,resolution))
+   
+    # Calculate currents on the mask
+    currents = calculate_currents_on_mask(Esource, mask)
+   
+  # Generate the far-field radiation patterns
+    polar_fig_unitary = plot_far_field_radiated_OYZ(Esource,mask, resolution,1800)
+    cartesian_fig_unitary = plot_far_field_cartesian(Esource,mask, resolution,1800)
+    
+    # Show the figures
+    plt.figure(polar_fig_unitary.number)
+    plt.tight_layout()
+    plt.savefig('polar_fig_unitary.png')
+    plt.figure(cartesian_fig_unitary.number)
+    plt.tight_layout()
+    plt.savefig('cartesian_fig_unitary.png')
+    plt.show()
 
-    # Calculate wave vectors and polarization vectors for each mode
-        for mode_num, mode in floquet_modes.items():
-            k_vector, is_evanescent = calculate_wave_vector(mode['m'], mode['n'], k0, ki)
-            polarization_vector = calculate_polarization_vectors(k_vector, mode['polarization'])
 
-        # Add wave vector, polarization vector, and evanescent flag to the mode
-            floquet_modes[mode_num]['k'] = k_vector
-            floquet_modes[mode_num]['polarization_vector'] = polarization_vector
-            floquet_modes[mode_num]['is_evanescent'] = is_evanescent
+    # Number of blocks for stacked array
+    num_blocks = 15  
+    element_spacing = Lz  
+    
+    # Generate the stacked array radiation patterns
+    total_E_fields, observation_points, theta_degrees = calculate_stacked_array_field(
+        Esource, mask, num_blocks, resolution, 1800, element_spacing
+    )
+    
+    # Create the polar plot
+    fig_polar = plot_stacked_array_field(
+        total_E_fields, observation_points, theta_degrees, plot_type='polar'
+    )
+    
+    # Create the cartesian plot
+    fig_cartesian = plot_stacked_array_field(
+        total_E_fields, observation_points, theta_degrees, plot_type='cartesian'
+    )
+    
+    # Show the plots
+    plt.show()
+    
+    # Save the figures with improved settings
+    plt.figure(fig_polar)
+    plt.savefig('stacked_array_polar.png')
+    
+    plt.figure(fig_cartesian)
+    plt.savefig('stacked_array_cartesian.png')
+    return polar_fig_unitary,cartesian_fig_unitary,fig_polar,fig_cartesian
 
-        # Use S-matrix to determine the amplitude for each mode
-        # Example: Use the S-parameters to set the amplitude (simplified)
-        # Here, we assume the S-matrix indices correspond to the mode indices
-            if mode_num - 1 < s_matrix.shape[0] and mode_num - 1 < s_matrix.shape[1]:
-                amplitude = s_matrix[mode_num - 1, mode_num - 1]  # Example: Use diagonal elements
-            else:
-                amplitude = 0.1 * np.exp(1j * np.pi/4)  # Default amplitude if index out of range
 
-            floquet_modes[mode_num]['amplitude'] = amplitude
-
-    # Print mode information
-        print_mode_info(floquet_modes)
-
-    # Calculate far-field pattern
-        E_far_field = calculate_far_field(floquet_modes, d_observation)
-
-    # Calculate far-field pattern for [0, 180] degrees
-        theta_vals = np.linspace(0, np.pi, 180)
-        E_far_field = calculate_far_field(floquet_modes, d_observation)
-        
-    # Create full 360 degree pattern by mirroring
-        full_theta = np.linspace(0, 2*np.pi, 360)
-        full_E = np.concatenate([E_far_field, np.flip(E_far_field)])
-        
-    # Create polar plot
-        plt.figure(figsize=(10, 10))
-        ax = plt.subplot(111, projection='polar')
-        ax.plot(full_theta, np.abs(full_E), linewidth=2)
-        ax.set_title('Far-Field Radiation Pattern', pad=20)
-        ax.grid(True)
-        
-    # Also create the original Cartesian plot for comparison
-        plt.figure(figsize=(10, 6))
-        plt.plot(np.rad2deg(full_theta), np.abs(full_E))
-        plt.title('Far-Field Pattern (0-360 degrees)')
-        plt.xlabel('Theta (degrees)')
-        plt.ylabel('|E|')
-        plt.grid(True)
-        
-        plt.show()
-
-main(input("Enter the filename of the S-parameter file: ")) 
+if __name__ == "__main__":
+    filename = input("Enter the filename of the S-parameter file: ")
+    main(filename)
