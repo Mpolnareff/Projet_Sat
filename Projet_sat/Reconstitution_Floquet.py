@@ -392,7 +392,7 @@ def plot_far_field_radiated_OYZ(field_source, mask, resolution=100, num_angles=1
     currents = calculate_currents_on_mask(field_source, mask)
 
     # Define observation angles in the OYZ plane (phi = 90°)
-    theta_linspace = np.linspace(0, np.pi, num_angles)
+    theta_linspace = np.linspace(-np.pi/2,np.pi/2, num_angles)
 
     # Calculate all observation points
     y = d_observation * np.cos(theta_linspace)
@@ -430,6 +430,8 @@ def plot_far_field_radiated_OYZ(field_source, mask, resolution=100, num_angles=1
     # Set plot limits and labels
     ax.set_rticks([-30, -20, -10, 0])  # dB scale
     ax.set_rlim([-40, 5])
+    ax.set_thetamin(-90)
+    ax.set_thetamax(90)
     ax.set_title('Far-Field Radiation Pattern (OYZ Plane)', pad=20)
     ax.grid(True)
     ax.legend(loc='upper right')
@@ -447,7 +449,7 @@ def plot_far_field_cartesian(field_source, mask, resolution=100, num_angles=180)
     currents = calculate_currents_on_mask(field_source, mask)
 
     # Define observation angles in the OYZ plane (phi = 90°)
-    theta_linspace = np.linspace(0, np.pi, num_angles)
+    theta_linspace = np.linspace(-np.pi/2,np.pi/2, num_angles)
 
     # Calculate all observation points for OYZ plane
     y = d_observation * np.cos(theta_linspace)
@@ -486,7 +488,7 @@ def plot_far_field_cartesian(field_source, mask, resolution=100, num_angles=180)
     ax.plot(theta_degrees, E_db, 'r-', linewidth=2, label='Electric Field (E)')
 
     # Set plot limits and labels
-    ax.set_xlim([0, 180])
+    ax.set_xlim([-90, 90])
     ax.set_ylim([-60, 5])
     ax.set_xlabel('Angle (degrees)', fontsize=12)
     ax.set_ylabel('Magnitude (dB)', fontsize=12)
@@ -534,7 +536,7 @@ def calculate_stacked_array_field(field_source, mask, num_blocks, resolution=100
     currents = calculate_currents_on_mask(field_source, mask)
     
     # Define observation angles in the OYZ plane (phi = 90°)
-    theta_linspace = np.linspace(0, np.pi, num_angles)
+    theta_linspace = np.linspace(-np.pi/2,np.pi/2, num_angles)
     theta_degrees = np.rad2deg(theta_linspace)
     
     # Calculate all observation points for OYZ plane
@@ -608,6 +610,8 @@ def plot_stacked_array_field(total_E_fields, M, theta_degrees, plot_type='polar'
         # Set plot limits and labels
         ax.set_rticks([-30, -20, -10, 0])  # dB scale
         ax.set_rlim([-40, 5])
+        ax.set_thetamin(-90)
+        ax.set_thetamax(90)
         ax.set_title('Far-Field Radiation Pattern (OYZ Plane) - Stacked Array', pad=20)
         ax.grid(True)
         ax.legend(loc='upper right')
@@ -620,7 +624,7 @@ def plot_stacked_array_field(total_E_fields, M, theta_degrees, plot_type='polar'
         ax.plot(theta_degrees, E_db, 'r-', linewidth=2, label='Electric Field (E)')
         
         # Set plot limits and labels
-        ax.set_xlim([0, 180])
+        ax.set_xlim([-90, 90])
         ax.set_ylim([-60, 5])
         ax.set_xlabel('Angle (degrees)', fontsize=12)
         ax.set_ylabel('Magnitude (dB)', fontsize=12)
